@@ -1,0 +1,55 @@
+name: KP scraper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Scrape (shard ${{ matrix.shard }})
+        env:
+          SHARD_ID: ${{ matrix.shard }}
+          SHARD_COUNT: "20"
+          CONCURRENCY: "6"
+          MIN_RATINGS: "50"
+          MIN_ACTIVE_ADS: "20"
+          CANDIDATE_MIN: "5"
+          MAX_RUNTIME_SECONDS: "18000"
+        run: python scraper.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-${{ matrix.shard }}
+          path: leads.csv
+          if-no-files-found: ignore
+
+  merge:
+    needs: scrape
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: parts
+      - run: python merge.py
+      - name: Konacna tabela
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-final
+          path: leads.csv
